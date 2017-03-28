@@ -1,10 +1,20 @@
-#include <a_samp>
+/* Natives:
+*	native fade(playerid, msIn, msWait, msOut, hide = 1, color = 0x000000FF);
+*	native fadeIn(playerid, ms, color = 0x000000FF);
+*	native fadeOut(playerid, hide = 1, color = 0x000000FF);
+*
+* 	por Stewie`
+*/
 
 forward Fader_PlayerProcess(playerid);
-forward OnPlayerFadeIn(playerid);
-forward OnPlayerFadeOut(playerid);
-stock fadeIn(playerid, ms, color = 0x000000FF);
-stock fadeOut(playerid, ms, color = 0x000000FF);
+
+#if defined OnPlayerFadeIn
+	forward OnPlayerFadeIn(playerid);
+#endif
+
+#if defined OnPlayerFadeOut
+	forward OnPlayerFadeOut(playerid);
+#endif
 
 static const
 	MAX_TRANSPARENCY = 0xFF,
@@ -24,6 +34,8 @@ enum E_PLAYER_FADE_INFO {
 	fadeColor,
 	
 	fadeTimer,
+	fadeHide,
+	fadeAll[4], // active, msWait, msOut, color
 	fadeType
 }
 static gPlayerFadeInfo[MAX_PLAYERS][E_PLAYER_FADE_INFO];
@@ -31,12 +43,22 @@ static gPlayerFadeInfo[MAX_PLAYERS][E_PLAYER_FADE_INFO];
 #define CAP_MAX(%0) ((%0 > MAX_TRANSPARENCY) ? (MAX_TRANSPARENCY) : %0)
 #define CAP_MIN(%0) ((%0 < 0) ? (0) : %0)
 
-/* Natives:
-*	native fadeIn(playerid, ms, color = 0x000000FF);
-*	native fadeOut(playerid, ms, color = 0x000000FF);
-*
-* 	por Stewie`
-*/
+
+stock fade(playerid, msIn, msWait, msOut, hide = 1, color = 0x000000FF)
+{
+	if(!IsPlayerConnected(playerid)) 
+		return 0;
+	if(msIn < 0 || msWait < 0 || msOut < 0)
+		return 0;
+
+	gPlayerFadeInfo[playerid][fadeAll][0] = 1;
+	gPlayerFadeInfo[playerid][fadeAll][1] = msWait;
+	gPlayerFadeInfo[playerid][fadeAll][2] = msOut;
+	gPlayerFadeInfo[playerid][fadeAll][3] = color;
+	gPlayerFadeInfo[playerid][fadeHide] = hide;
+
+	return fadeIn(playerid, msIn, color);
+}
 
 stock fadeIn(playerid, ms, color = 0x000000FF) {
 	if(!IsPlayerConnected(playerid)) 
@@ -81,7 +103,7 @@ stock fadeIn(playerid, ms, color = 0x000000FF) {
 	return 1;
 }
 
-stock fadeOut(playerid, ms, color = 0x000000FF) {
+stock fadeOut(playerid, ms, hide = 1, color = 0x000000FF) {
 	if(!IsPlayerConnected(playerid)) 
 		return 0;
 		
@@ -99,6 +121,7 @@ stock fadeOut(playerid, ms, color = 0x000000FF) {
 	// configurar o tipo de fade que estamos aplicando
 	gPlayerFadeInfo[playerid][fadeType] = FADE_OUT;
 	
+	gPlayerFadeInfo[playerid][fadeHide] = hide;
 	// mover um byte para a direita para 'apagar' a transparência
 	// e '>>' para não voltar para o começo os primeiros bits
 	gPlayerFadeInfo[playerid][fadeColor] = color >> 8;
@@ -125,6 +148,12 @@ stock fadeOut(playerid, ms, color = 0x000000FF) {
 }
 
 public Fader_PlayerProcess(playerid) {
+
+	if(gPlayerFadeInfo[playerid][fadeAll][0] && gPlayerFadeInfo[playerid][fadeAll][1] == -1)
+	{
+		fadeOut(playerid, gPlayerFadeInfo[playerid][fadeAll][2], gPlayerFadeInfo[playerid][fadeAll][3]);
+		return 1;
+	}
 	// se o fade foi desligado para o player, mas o timer ainda está ativo
 	if(gPlayerFadeInfo[playerid][fadeType] == 0) {
 		// se o timer existe
@@ -135,6 +164,7 @@ public Fader_PlayerProcess(playerid) {
 			PlayerTextDrawBoxColor(playerid, gPlayerFadeInfo[playerid][fadeText], (gPlayerFadeInfo[playerid][fadeColor] << 8) | gPlayerFadeInfo[playerid][fadeCurrentAlpha]);
 			PlayerTextDrawShow(playerid, gPlayerFadeInfo[playerid][fadeText]);
 		}
+		return 1;
 	}
 	
 	switch(gPlayerFadeInfo[playerid][fadeType]) {
@@ -150,7 +180,15 @@ public Fader_PlayerProcess(playerid) {
 				KillTimer(gPlayerFadeInfo[playerid][fadeTimer]);
 				gPlayerFadeInfo[playerid][fadeTimer] = 0;
 
-				CallLocalFunction("OnPlayerFadeIn", "i", playerid);
+				if(gPlayerFadeInfo[playerid][fadeAll][0])
+				{
+					gPlayerFadeInfo[playerid][fadeTimer] = SetTimerEx("Fader_PlayerProcess", gPlayerFadeInfo[playerid][fadeAll][1], 0, "i", playerid);
+					gPlayerFadeInfo[playerid][fadeAll][0] = 0;
+					gPlayerFadeInfo[playerid][fadeAll][1] = -1;
+				}
+				#if defined OnPlayerFadeIn
+				OnPlayerFadeIn(playerid);
+				#endif
 			}
 		}
 		case FADE_OUT: {
@@ -165,15 +203,27 @@ public Fader_PlayerProcess(playerid) {
 				KillTimer(gPlayerFadeInfo[playerid][fadeTimer]);
 				gPlayerFadeInfo[playerid][fadeTimer] = 0;
 
-				CallLocalFunction("OnPlayerFadeOut", "i", playerid);
+				if(gPlayerFadeInfo[playerid][fadeHide])
+				{
+					PlayerTextDrawHide(playerid, gPlayerFadeInfo[playerid][fadeText]);
+				}
+				if(gPlayerFadeInfo[playerid][fadeAll][0])
+				{
+					gPlayerFadeInfo[playerid][fadeAll][0] = 0;
+					gPlayerFadeInfo[playerid][fadeAll][1] = 0;
+				}
+				#if defined OnPlayerFadeOut
+				OnPlayerFadeOut(playerid);
+				#endif
 			}
 		}
 	}
 	return 1;
 }
 
-public OnPlayerConnect(playerid) {
-	new tmp[E_PLAYER_FADE_INFO];
+public OnPlayerConnect(playerid)
+{
+	static tmp[E_PLAYER_FADE_INFO];
 	gPlayerFadeInfo[playerid] = tmp;
 
 	new PlayerText:text = CreatePlayerTextDraw(playerid, -20.0, -20.0, "_");
@@ -184,35 +234,39 @@ public OnPlayerConnect(playerid) {
 	PlayerTextDrawLetterSize(playerid, text, 680.0, 500.0);
 	PlayerTextDrawTextSize(playerid, text, 680.0, 500.0);
 
-	if (funcidx("Fader_OnPlayerConnect") != -1)
-	{
-		return CallLocalFunction("Fader_OnPlayerConnect", "i", playerid);
-	}	
-    return 1;
+	#if defined fader_OnPlayerConnect
+		return fader_OnPlayerConnect(playerid);
+	#else
+		return 1;
+	#endif
 }
-
-public OnPlayerDisconnect(playerid,reason) {
-	gPlayerFadeInfo[playerid][fadeTimer] = 0;
-
-	if (funcidx("Fader_OnPlayerDisconnect") != -1)
-	{
-		return CallLocalFunction("Fader_OnPlayerDisconnect", "ii", playerid, reason);
-	}	
-    return 1;
-}
-
 #if defined _ALS_OnPlayerConnect
-    #undef OnPlayerConnect
+	#undef OnPlayerConnect
 #else
-    #define _ALS_OnPlayerConnect
+	#define _ALS_OnPlayerConnect
 #endif
-#define OnPlayerConnect Fader_OnPlayerConnect
-forward Fader_OnPlayerConnect(playerid);
+ 
+#define OnPlayerConnect fader_OnPlayerConnect
+#if defined fader_OnPlayerConnect
+	forward fader_OnPlayerConnect(playerid);
+#endif
 
-#if defined _ALS_OnPlayerDisconnect
-    #undef OnPlayerDisconnect
+public OnGameModeExit(playerid, reason)
+{
+	gPlayerFadeInfo[playerid][fadeTimer] = 0;
+	#if defined fader_OnGameModeExit
+		return fader_OnGameModeExit(playerid, reason);
+	#else
+		return 1;
+	#endif
+}
+#if defined _ALS_OnGameModeExit
+	#undef OnGameModeExit
 #else
-    #define _ALS_OnPlayerDisconnect
+	#define _ALS_OnGameModeExit
 #endif
-#define OnPlayerDisconnect Fader_OnPlayerDisconnect
-forward OnPlayerDisconnect(playerid, reason);
+ 
+#define OnGameModeExit fader_OnGameModeExit
+#if defined fader_OnGameModeExit
+	forward fader_OnGameModeExit(playerid, reason);
+#endif
