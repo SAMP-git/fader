@@ -251,22 +251,22 @@ public OnPlayerConnect(playerid)
 	forward fader_OnPlayerConnect(playerid);
 #endif
 
-public OnGameModeExit(playerid, reason)
+public OnPlayerDisconnect(playerid, reason)
 {
 	gPlayerFadeInfo[playerid][fadeTimer] = 0;
-	#if defined fader_OnGameModeExit
-		return fader_OnGameModeExit(playerid, reason);
+	#if defined fader_OnPlayerDisconnect
+		return fader_OnPlayerDisconnect(playerid, reason);
 	#else
 		return 1;
 	#endif
 }
-#if defined _ALS_OnGameModeExit
-	#undef OnGameModeExit
+#if defined _ALS_OnPlayerDisconnect
+	#undef OnPlayerDisconnect
 #else
-	#define _ALS_OnGameModeExit
+	#define _ALS_OnPlayerDisconnect
 #endif
  
-#define OnGameModeExit fader_OnGameModeExit
-#if defined fader_OnGameModeExit
-	forward fader_OnGameModeExit(playerid, reason);
+#define OnPlayerDisconnect fader_OnPlayerDisconnect
+#if defined fader_OnPlayerDisconnect
+	forward fader_OnPlayerDisconnect(playerid, reason);
 #endif
