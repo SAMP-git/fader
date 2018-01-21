@@ -1,0 +1,13 @@
+{
+	"user": "SAMP-git",
+	"repo": "samp-include-fader",
+	"entry": "fs-teste.pwn",
+	"output": "fs-teste.amx",
+	"dependencies": [
+		"sampctl/samp-stdlib"
+	],
+	"dev_dependencies": [
+		"maddinat0r/sscanf",
+		"SAMP-git/zcmd"
+	]
+}

@@ -20,7 +20,7 @@
 #include <fader>
 #include <zcmd>
  
-public OnFilterScriptInit() {
+public OnGameModeInit() {
 	print("* fadeTest Script por Stewie` carregado.");
 	return 1;
 }
